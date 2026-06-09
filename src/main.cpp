@@ -35,12 +35,6 @@ auto timer = timer_create_default();
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-unsigned long lastMsg = 0;
-unsigned long lastTCread= 0;
-#define MSG_BUFFER_SIZE	(50)
-char msg[MSG_BUFFER_SIZE];
-
-
 
 #pragma region  Webserver Styling
 
