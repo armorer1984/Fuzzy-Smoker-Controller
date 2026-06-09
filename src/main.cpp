@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "OneButton.h"
-#include <LiquidCrystal_I2C.h>
+//#include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 #include <Adafruit_MAX31855.h>  //Library for the thermocouple amplifier
 #include <Preferences.h>
@@ -14,8 +14,11 @@
 #include <Fuzzy.h>
 #include <arduino-timer.h>  
 #include <secrets.h>
+#include "updateEntireDisplay.h"
+#include "fuzzyRules.h"
+#include <webserverStyling.h>
 
-String version = "2.2.1";   // Update the version # here
+String version = "2.2.2";   // Update the version # here
 
 #pragma region OneWire DS18B20 Definitions
 #define ONE_WIRE_BUS 17
@@ -39,79 +42,10 @@ unsigned long lastTCread= 0;
 #define MSG_BUFFER_SIZE	(50)
 char msg[MSG_BUFFER_SIZE];
 
-// Instantiating a Fuzzy object
-Fuzzy *fuzzy = new Fuzzy();
+
 
 #pragma region  Webserver Styling
-/* Style */
-String style =
-"<style>#file-input,input{width:100%;height:44px;border-radius:4px;margin:10px auto;font-size:15px}"
-"input{background:#f1f1f1;border:0;padding:0 15px}body{background:#3498db;font-family:sans-serif;font-size:14px;color:#777}"
-"#file-input{padding:0;border:1px solid #ddd;line-height:44px;text-align:left;display:block;cursor:pointer}"
-"#bar,#prgbar{background-color:#f1f1f1;border-radius:10px}#bar{background-color:#3498db;width:0%;height:10px}"
-"form{background:#fff;max-width:258px;margin:75px auto;padding:30px;border-radius:5px;text-align:center}"
-".btn{background:#3498db;color:#fff;cursor:pointer}</style>";
 
-/* Login page */
-String loginIndex = 
-"<form name=loginForm>"
-"<h1>Smoker Login</h1>"
-"<input name=userid placeholder='User ID'> "
-"<input name=pwd placeholder=Password type=Password> "
-"<input type=submit onclick=check(this.form) class=btn value=Login></form>"
-"<script>"
-"function check(form) {"
-"if(form.userid.value=='admin' && form.pwd.value=='admin')"
-"{window.open('/serverIndex')}"
-"else"
-"{alert('Error Password or Username')}"
-"}"
-"</script>" + style;
- 
-/* Server Index Page */
-String serverIndex = 
-"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
-"<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
-"<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
-"<label id='file-input' for='file'>   Choose file...</label>"
-"<input type='submit' class=btn value='Update'>"
-"<br><br>"
-"<div id='prg'></div>"
-"<br><div id='prgbar'><div id='bar'></div></div><br></form>"
-"<script>"
-"function sub(obj){"
-"var fileName = obj.value.split('\\\\');"
-"document.getElementById('file-input').innerHTML = '   '+ fileName[fileName.length-1];"
-"};"
-"$('form').submit(function(e){"
-"e.preventDefault();"
-"var form = $('#upload_form')[0];"
-"var data = new FormData(form);"
-"$.ajax({"
-"url: '/update',"
-"type: 'POST',"
-"data: data,"
-"contentType: false,"
-"processData:false,"
-"xhr: function() {"
-"var xhr = new window.XMLHttpRequest();"
-"xhr.upload.addEventListener('progress', function(evt) {"
-"if (evt.lengthComputable) {"
-"var per = evt.loaded / evt.total;"
-"$('#prg').html('progress: ' + Math.round(per*100) + '%');"
-"$('#bar').css('width',Math.round(per*100) + '%');"
-"}"
-"}, false);"
-"return xhr;"
-"},"
-"success:function(d, s) {"
-"console.log('success!') "
-"},"
-"error: function (a, b, c) {"
-"}"
-"});"
-"});"
-"</script>" + style;
 #pragma endregion
 
 WebServer server(80);
@@ -128,12 +62,6 @@ Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO); // Initialize the
 #define DT 36
 #define ENC_BUTTON_PIN 34   // USE EXTERNAL PULL-UP
 
-// I2C SDA:GPIO21, SCL:GPIO22
-#define COLUMS           20   //LCD columns
-#define ROWS             4    //LCD rows
-LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
-
-
 #pragma region  Global Variables
 int counter = 0;
 int currentStateCLK;
@@ -147,13 +75,12 @@ int minFanPWMSetting = 942;  // Corresponds to 23% fan output
 int maxFanPWMSetting = 2253; // Corresponds to 55% fan output
 int minFanPercentage = 23;
 int maxFanPercentage = 55;
-int fuzzOutput = 0;
-int currentFanPercentMinMax=0;
+int fuzzOutput;
+int currentFanPercentMinMax;
 int lastFanPercentMinMax = 0;
 int currentReadTemp, prevReadTemp;
 int controlMode = 0; // 0 = auto, 1 = manual
 bool isConnected = false;
-//long lastReconnectAttempt = 0;
 
 #pragma endregion
 
@@ -167,29 +94,6 @@ int menuDisplayMode;
 OneButton button(ENC_BUTTON_PIN, true);
 
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
-
-void updateEntireDisplay(){
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Set Temp: ");
-  lcd.print(setTemp,0);
-  lcd.print(" ");
-  lcd.setCursor(0,1);
-  lcd.print("Actual Temp: ");
-  lcd.print(currentReadTemp);
-  lcd.print(" ");
-  lcd.setCursor(0,2);
-  lcd.print("Control: ");
-  if (controlMode==0){
-    lcd.print("AUTO   ");
-  } else{
-    lcd.print("MANUAL");
-  }
-  lcd.setCursor(0,3);
-  lcd.print("Fan: ");
-  lcd.print(currentFanPercentMinMax);
-  lcd.print("%   ");
-}
 
 boolean MQTTreconnect() {
   if (client.connect("SmokerController", "smoker", "smoker")) {
@@ -325,7 +229,7 @@ void singleEncClick() // this function will be called when a single encoder butt
       preferences.putInt("controlMode", 1); // Write control mode to memory
       controlMode=1;  // change the control mode from Auto to Manual
     }
-    updateEntireDisplay();
+    updateEntireDisplay(setTemp, currentReadTemp, controlMode, currentFanPercentMinMax);
   } 
   sendTempsJSONMQTT(nullptr); // send an update to HA on button press
 }
@@ -356,7 +260,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       if (currentFanPercentMinMax < 0){
         currentFanPercentMinMax=0;
       }
-      updateEntireDisplay();
+      updateEntireDisplay(setTemp, currentReadTemp, controlMode, currentFanPercentMinMax);
     }
   }
   timer.in(500,sendTempsJSONMQTT);  //send an update back to HA
@@ -375,70 +279,6 @@ void updateLCDSetTemp(){
   lcd.print(setTemp,0);
   lcd.print("  ");
 
-}
-
-void updateFuzzy(){
-
-  FuzzyInput *fuzzTemp = new FuzzyInput(1);
-  FuzzySet *cold = new FuzzySet(-20,-20,-15,-7.5);
-  fuzzTemp->addFuzzySet(cold);
-  FuzzySet *cool = new FuzzySet(-15,-7.5,-7.5,0);
-  fuzzTemp->addFuzzySet(cool);
-  FuzzySet *close= new FuzzySet(-7.5,0,0,7.5);
-  fuzzTemp->addFuzzySet(close);
-  FuzzySet *warm = new FuzzySet(0,7.5,7.5,15);
-  fuzzTemp->addFuzzySet(warm);
-  FuzzySet *hot = new FuzzySet(7.5,15,15,20);
-  fuzzTemp->addFuzzySet(hot);
-  fuzzy->addFuzzyInput(fuzzTemp);
-
-  FuzzyOutput *fanSpeed = new FuzzyOutput(1);
-  FuzzySet *fanSlow = new FuzzySet(minFanPWMSetting, minFanPWMSetting, 1012, 1232);
-  fanSpeed->addFuzzySet(fanSlow);
-  FuzzySet *fanMedSlow = new FuzzySet(minFanPWMSetting, 1232, 1232, 1597);
-  fanSpeed->addFuzzySet(fanMedSlow);
-  FuzzySet *fanMed = new FuzzySet(1232, 1597, 1597, 1963);
-  fanSpeed->addFuzzySet(fanMed);
-  FuzzySet *fanMedFast = new FuzzySet(1597, 1963, 1963, maxFanPWMSetting);
-  fanSpeed->addFuzzySet(fanMedFast);
-  FuzzySet *fanFast = new FuzzySet(1963, 2182, maxFanPWMSetting, maxFanPWMSetting);
-  fanSpeed->addFuzzySet(fanFast);
-  fuzzy->addFuzzyOutput(fanSpeed);
-
-  FuzzyRuleAntecedent *ifTempCold = new FuzzyRuleAntecedent();
-  ifTempCold->joinSingle(cold);
-  FuzzyRuleConsequent *thenFanFast = new FuzzyRuleConsequent();
-  thenFanFast->addOutput(fanFast);
-  FuzzyRule *fuzzyRule1 = new FuzzyRule(1, ifTempCold, thenFanFast);
-  fuzzy->addFuzzyRule(fuzzyRule1);
-
-  FuzzyRuleAntecedent *ifTempCool = new FuzzyRuleAntecedent();
-  ifTempCool->joinSingle(cool);
-  FuzzyRuleConsequent *thenFanMedFast = new FuzzyRuleConsequent();
-  thenFanMedFast->addOutput(fanMedFast);
-  FuzzyRule *fuzzyRule2 = new FuzzyRule(2, ifTempCool, thenFanMedFast);
-  fuzzy->addFuzzyRule(fuzzyRule2);
-
-  FuzzyRuleAntecedent *ifTempClose = new FuzzyRuleAntecedent();
-  ifTempClose->joinSingle(close);
-  FuzzyRuleConsequent *thenFanMed = new FuzzyRuleConsequent();
-  thenFanMed->addOutput(fanMed);
-  FuzzyRule *fuzzyRule3 = new FuzzyRule(3, ifTempClose, thenFanMed);
-  fuzzy->addFuzzyRule(fuzzyRule3);
-
-  FuzzyRuleAntecedent *ifTempWarm = new FuzzyRuleAntecedent();
-  ifTempWarm->joinSingle(warm);
-  FuzzyRuleConsequent *thenFanMedSlow = new FuzzyRuleConsequent();
-  thenFanMedSlow->addOutput(fanMedSlow);
-  FuzzyRule *fuzzyRule4 = new FuzzyRule(4, ifTempWarm, thenFanMedSlow);
-  fuzzy->addFuzzyRule(fuzzyRule4);
-
-  FuzzyRuleAntecedent *ifTempHot = new FuzzyRuleAntecedent();
-  ifTempHot->joinSingle(hot);
-  FuzzyRuleConsequent *thenFanSlow = new FuzzyRuleConsequent();
-  thenFanSlow->addOutput(fanSlow);
-  FuzzyRule *fuzzyRule5 = new FuzzyRule(5, ifTempHot, thenFanSlow);
-  fuzzy->addFuzzyRule(fuzzyRule5);
 }
 
 void setup() {
@@ -544,9 +384,9 @@ void setup() {
   timer.every(300, readThermocouple); // fire the readThermocouple function every 300ms to update the temp reading and fuzzy logic output
   timer.every(5000, sendTempsJSONMQTT); // fire the sendTempsJSONMQTT function every 5 seconds to send an update to HA
 
-  updateEntireDisplay();
+  updateEntireDisplay(setTemp, currentReadTemp, controlMode, currentFanPercentMinMax); // update the LCD with the initial values from memory
 
-  updateFuzzy(); //create the fuzzy sets and rules for the fuzzy logic controller
+  updateFuzzy(minFanPWMSetting, maxFanPWMSetting); //create the fuzzy sets and rules for the fuzzy logic controller
 
 }
 
