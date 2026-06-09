@@ -59,7 +59,6 @@ int counter = 0;
 int currentStateCLK;
 int lastStateCLK;
 volatile bool encoderChanged;
-String currentDir ="";
 int setTemp;
 int thermoReadTemp = 0;
 int thermoDisplayTemp;
@@ -116,11 +115,9 @@ void IRAM_ATTR updateEncoder(){
 		// the encoder is rotating CCW so decrement
 		if (digitalRead(DT) != currentStateCLK) {
 			counter --;
-			currentDir ="CCW";
 		} else {
 			// Encoder is rotating CW so increment
 			counter ++;
-			currentDir ="CW";
 		}
     encoderChanged=true;
 	}
