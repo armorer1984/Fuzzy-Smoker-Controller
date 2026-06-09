@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include "OneButton.h"
-//#include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 #include <Adafruit_MAX31855.h>  //Library for the thermocouple amplifier
 #include <Preferences.h>
@@ -11,12 +10,11 @@
 #include <Update.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <Fuzzy.h>
 #include <arduino-timer.h>  
-#include <secrets.h>
+#include "secrets.h"
 #include "updateEntireDisplay.h"
 #include "fuzzyRules.h"
-#include <webserverStyling.h>
+#include "webserverStyling.h"
 
 String version = "2.2.2";   // Update the version # here
 

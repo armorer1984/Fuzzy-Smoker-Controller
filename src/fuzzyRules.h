@@ -1,5 +1,5 @@
 #include <Fuzzy.h>
-#include <Arduino.h>
+// #include <Arduino.h>
 
 // Instantiating a Fuzzy object
 Fuzzy *fuzzy = new Fuzzy();
