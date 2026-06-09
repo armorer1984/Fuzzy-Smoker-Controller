@@ -30,11 +30,6 @@ DeviceAddress probe5 = {0x28, 0x29, 0xD7, 0x80, 0xE3, 0xE1, 0x3C, 0x67};
 DeviceAddress probe6 = {0x28, 0x81, 0x11, 0x80, 0xE3, 0xE1, 0x3C, 0x24};
 #pragma endregion
 
-//const char* WIFI_SSID = HOME_WIFI_SSID;
-//const char* WIFI_PASSWORD = HOME_WIFI_PASSWORD;
-//const char* mqtt_server = MQTT_SERVER;
-//const char* hostname = HOSTNAME;
-
 auto timer = timer_create_default();
 
 WiFiClient espClient;
