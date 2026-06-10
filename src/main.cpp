@@ -56,17 +56,13 @@ Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO); // Initialize the
 
 #pragma region  Global Variables
 int counter = 0;
-int currentStateCLK;
 int lastStateCLK;
 volatile bool encoderChanged;
 int setTemp;
-int thermoReadTemp = 0;
-int thermoDisplayTemp;
 int minFanPWMSetting = 942;  // Corresponds to 23% fan output
 int maxFanPWMSetting = 2253; // Corresponds to 55% fan output
-int minFanPercentage = 23;
-int maxFanPercentage = 55;
-int fuzzOutput;
+// int minFanPercentage = 23;
+// int maxFanPercentage = 55;
 int currentFanPercentMinMax;
 int lastFanPercentMinMax = 0;
 int currentReadTemp, prevReadTemp;
@@ -103,6 +99,7 @@ void IRAM_ATTR checkTicks()
 }
 
 void IRAM_ATTR updateEncoder(){
+  int currentStateCLK;
 	portENTER_CRITICAL_ISR(&mux);
   // Read the current state of CLK
 	currentStateCLK = digitalRead(CLK);
@@ -148,6 +145,7 @@ bool readThermocouple(void *){
     prevReadTemp = currentReadTemp;          // And write it for the next iteration
   } 
   if(controlMode==0){  // if we are in Auto mode, update the fuzzy logic controller with the new temp reading
+      int fuzzOutput;
       double tempError = fuzzyTempBase - setTemp;  // calculate the temperature error
       fuzzy->setInput(1, tempError);  // send the current temp to the fuzzy input
       fuzzy->fuzzify(); // Running the Fuzzification
@@ -208,22 +206,19 @@ bool sendTempsJSONMQTT(void*){
 
 void singleEncClick() // this function will be called when a single encoder button press happens
 {  
-  if (menuDisplayMode==0) {
-
-    if(controlMode==1){   // if the control mode is manual
-      preferences.putInt("controlMode", 0); // Write control mode to memory
-      controlMode = 0; // Set control mode to Auto
-    } 
-    else if (controlMode==0) {  //otherwise, the control mode must be 0 (Auto)
-      preferences.putInt("controlMode", 1); // Write control mode to memory
-      controlMode=1;  // change the control mode from Auto to Manual
-    }
-    updateEntireDisplay(setTemp, currentReadTemp, controlMode, currentFanPercentMinMax);
+  if(controlMode==1){   // if the control mode is manual
+    preferences.putInt("controlMode", 0); // Write control mode to memory
+    controlMode = 0; // Set control mode to Auto
   } 
+  else if (controlMode==0) {  //otherwise, the control mode must be 0 (Auto)
+    preferences.putInt("controlMode", 1); // Write control mode to memory
+    controlMode=1;  // change the control mode from Auto to Manual
+  }
+  updateEntireDisplay(setTemp, currentReadTemp, controlMode, currentFanPercentMinMax);
   sendTempsJSONMQTT(nullptr); // send an update to HA on button press
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, unsigned int length) {  // MQTT callback function. This is called when a message is received on a topic we are subscribed to (in this case, "smoker/control")
   // command topic:  "smoker/control"
   StaticJsonDocument<64> INdoc;
   deserializeJson(INdoc, payload, length);
@@ -313,7 +308,7 @@ void setup() {
   {
      delay(1000);
   }
-  counter=0;
+
   lastFanPercentMinMax = 0;
 
   delay(3000);

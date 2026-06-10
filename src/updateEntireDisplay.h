@@ -1,5 +1,4 @@
 #include <LiquidCrystal_I2C.h>
-#include <Arduino.h>
 
 // I2C SDA:GPIO21, SCL:GPIO22
 #define COLUMS           20   //LCD columns
